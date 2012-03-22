@@ -1,0 +1,155 @@
+#!/bin/bash
+#
+# Description:  resource agents for monitoring the number of processes
+#
+# Authors:      Takatoshi MATSUO (matsuo.tak@gmail.com)
+# Copyright:    Takatoshi MTTSUO (matsuo.tak@gmail.com)
+# License:      GNU General Public License (GPL)
+#
+###############################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+# Defaults
+OCF_RESKEY_name_default=""
+OCF_RESKEY_number_default="1"
+: ${OCF_RESKEY_name=${OCF_RESKEY_name_default}}
+: ${OCF_RESKEY_number=${OCF_RESKEY_number_default}}
+
+usage() {
+    cat <<EOF
+        usage: $0 start|stop|status|monitor|meta-data|validate-all|methods
+
+        $0 monitor processes
+
+        The 'start' operation starts (only check the process)
+        The 'stop' operation stops (do nothing)
+        The 'status' operation reports whether the Process exists.
+        The 'monitor' operation reports whether the Process is running.
+        The 'validate-all' operation reports whether the parameters are valid.
+        The 'methods' operation reports on the methods $0 supports.
+EOF
+    return $OCF_ERR_ARGS
+}
+
+meta_data() {
+    cat <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="Process">
+<version>1.0</version>
+
+<longdesc lang="ja">
+(en)
+Resource agent for monitoring the number of processes
+you specified. If the process dosen't exist, start is failed.
+(ja)
+特定のプロセスの存在とプロセス数を監視するエージェントです。
+起動時に指定したプロセスが存在しない場合も故障となります。
+停止は必ず成功します。(何もしません)
+</longdesc>
+<shortdesc lang="en">monitoring a process</shortdesc>
+
+<parameters>
+<parameter name="name" unique="0" required="1">
+<longdesc lang="ja">
+(en)
+Process name.Please extract process name
+using "ps -e -o comm" (perfect matching)
+(ja)
+監視したいプロセス名を指定します。
+指定するプロセス名は、"ps -e -o comm" コマンドで表示される
+プロセス名(完全一致)です。
+</longdesc>
+<shortdesc lang="en">process name</shortdesc>
+<content type="string" default="${OCF_RESKEY_name_default}" />
+</parameter>
+
+<parameter name="number" unique="0" required="0">
+<longdesc lang="ja">
+(en)
+The number of processes you specified as "name" parameter.
+Monitor is failed if the number is less than this parameter.
+(ja)
+指定したプロセスの数を指定します。この数未満になると故障となります。
+</longdesc>
+<shortdesc lang="en">the number of processes</shortdesc>
+<content type="integer" default="${OCF_RESKEY_number_default}" />
+</parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="30" />
+<action name="stop" timeout="30" />
+<action name="status" timeout="30" />
+<action name="monitor" timeout="30" interval="30"/>
+<action name="meta-data" timeout="5" />
+<action name="validate-all" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+EOF
+}
+
+process_methods() {
+    cat <<EOF
+    start
+    stop
+    status
+    monitor
+    methods
+    validate-all
+    meta-data
+EOF
+}
+
+process_monitor() {
+    local num
+    num=`ps -e -o comm | grep "^$OCF_RESKEY_name$" | wc -l`
+    if [ $num -lt $OCF_RESKEY_number ]; then
+        ocf_log err "The number of $OCF_RESKEY_name is $num < $OCF_RESKEY_number"
+        return $OCF_NOT_RUNNING
+    fi
+    return $OCF_CUCCESS
+}
+
+process_validate_all() {
+    if [ -z $OCF_RESKEY_name ]; then
+        ocf_log err "name can't be empty.$OCF_RESKEY_name"
+        return $OCF_ERR_CONFIGURED
+    fi
+    return $OCF_SUCCESS
+}
+
+### 'main' ###################################
+if [ $# -ne 1 ]
+then
+    usage
+    exit $OCF_ERR_GENERIC
+fi
+
+case "$1" in
+    methods)    process_methods
+                exit $?;;
+
+    meta-data)  meta_data
+                exit $OCF_SUCCESS;;
+esac
+
+process_validate_all
+rc=$?
+[ "$1" = "validate-all" ] && exit $rc
+
+case "$1" in
+    start|status|monitor)
+                process_monitor
+                exit $?
+                ;;
+    stop)
+                exit $OCF_SUCCESS 
+                ;;
+    *)
+                exit $OCF_ERR_UNIMPLEMENTED;;
+esac
