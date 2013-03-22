@@ -8,6 +8,7 @@
 #
 # usage : ./ptest-cutter.sh [bzip-direcotry] [noptest]
 
+: ${PTEST:=$(which ptest 2>/dev/null)}
 PTESTDIR=ptest-result
 CUTDIR=ptest-cut
 SKIP="false"
@@ -29,14 +30,13 @@ fi
 BZ2DIR=$1
 
 # check binary
-which ptest > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "ptest command not found"
+if [ -z "$PTEST" -o ! -x "$PTEST" ]; then
+    echo "ptest command not found: $PTEST"
     exit 1
 fi
 
 # check version
-VERSION=`ptest --version | head -1 | tr -s " " | cut -d " " -f 2`
+VERSION=`$PTEST --version | head -1 | tr -s " " | cut -d " " -f 2`
 echo $VERSION | grep -q [^0-9.-]
 if [ $? -eq 0 ]; then
     echo "version [$VERSION] is invalid"
@@ -70,7 +70,7 @@ if [ "$SKIP" = "false" ]; then
         input_file=`basename $bz2file`
         output_file=`echo "$input_file" | sed -e "s/bz2$/log/g"`
         echo "Making log file of $input_file"
-        bunzip2 -c $BZ2DIR/$input_file | ptest -VVV -s -x - > $VERSION/$PTESTDIR/$output_file 2>&1
+        bunzip2 -c $BZ2DIR/$input_file | $PTEST -VVV -s -x - > $VERSION/$PTESTDIR/$output_file 2>&1
     done
 fi
 
