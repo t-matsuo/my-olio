@@ -5,29 +5,40 @@
 #
 #   Authors  : Takatoshi MATSUO (matsuo.tak@gmail.com)
 #   Copyright: Takatoshi MTTSUO (matsuo.tak@gmail.com)
-#
-# usage : ./ptest-cutter.sh [bzip-direcotry] [noptest]
 
 : ${PTEST:=$(which ptest 2>/dev/null)}
 PTESTDIR=ptest-result
 CUTDIR=ptest-cut
-SKIP="false"
+SKIP_PTEST="false"
 
-if [ "$1" = "" ]; then
-    echo "usage : ./ptest-cutter.sh [bzip2 directory]"
+usage() {
+cat << END
+
+Usage : ptest-cutter.sh [-c] {-b} directory
+
+      OPTIONS
+      -b directory     specify the directory including bz2 files
+      -c               cut only (not execute ptest)
+
+END
     exit 1
-fi
+}
 
-if [ "$2" = "noptest" ]; then
-    echo "skip ptest"
-    SKIP="true"
-fi
+while getopts "b:c" opts; do
+    case $opts in
+    b)
+        BZ2DIR=$OPTARG
+        ;;
+    c)
+        SKIP_PTEST="true"
+        ;;
+    esac
+done
 
-if [ ! -d $1 ]; then
-    echo "\"$1\" directory not found"
-    exit 1
+if [ ! -n "$BZ2DIR" ]; then
+    echo "directory not found"
+    usage
 fi
-BZ2DIR=$1
 
 # check binary
 if [ -z "$PTEST" -o ! -x "$PTEST" ]; then
@@ -57,14 +68,14 @@ if [ ! -d $VERSION/$CUTDIR ]; then
 fi
 
 # cleanup
-if [ "$SKIP" = "false" ]; then
+if [ "$SKIP_PTEST" = "false" ]; then
     rm -f $VERSION/$PTESTDIR/*.log
 fi
 rm -f $VERSION/$CUTDIR/*.log
 
 ### main #############################################
 # output result of ptest
-if [ "$SKIP" = "false" ]; then
+if [ "$SKIP_PTEST" = "false" ]; then
     for bz2file in `ls $BZ2DIR/*bz2`
     do
         input_file=`basename $bz2file`
