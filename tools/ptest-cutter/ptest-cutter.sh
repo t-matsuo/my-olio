@@ -32,12 +32,15 @@ while getopts "b:cd" opts; do
     case $opts in
     b)
         BZ2DIR=$OPTARG
+        echo "bz2 directory is $BZ2DIR"
         ;;
     c)
         SKIP_PTEST="true"
+        echo "Not execute ptest : $SKIP_PTEST"
         ;;
     d)
         CREATE_DOT="true"
+        echo "Create dot files : $CREATE_DOT"
         ;;
     :|\?)
         usage
@@ -65,6 +68,7 @@ if [ $? -eq 0 ]; then
 fi
 
 echo "ptest version is $VERSION"
+echo
 
 # make directory
 if [ ! -d $VERSION ]; then
