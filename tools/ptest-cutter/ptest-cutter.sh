@@ -9,28 +9,38 @@
 : ${PTEST:=$(which ptest 2>/dev/null)}
 PTESTDIR=ptest-result
 CUTDIR=ptest-cut
+DOTDIR=ptest-dot
+
 SKIP_PTEST="false"
+CREATE_DOT="false"
 
 usage() {
 cat << END
 
-Usage : ptest-cutter.sh [-c] {-b} directory
+usage : ptest-cutter.sh [-c] [-g] {-b} directory
 
       OPTIONS
       -b directory     specify the directory including bz2 files
       -c               cut only (not execute ptest)
+      -d               create dot files
 
 END
     exit 1
 }
 
-while getopts "b:c" opts; do
+while getopts "b:cd" opts; do
     case $opts in
     b)
         BZ2DIR=$OPTARG
         ;;
     c)
         SKIP_PTEST="true"
+        ;;
+    d)
+        CREATE_DOT="true"
+        ;;
+    :|\?)
+        usage
         ;;
     esac
 done
@@ -66,12 +76,18 @@ fi
 if [ ! -d $VERSION/$CUTDIR ]; then
     mkdir $VERSION/$CUTDIR
 fi
+if [ $CREATE_DOT = "true" -a ! -d $VERSION/$DOTDIR ]; then
+    mkdir $VERSION/$DOTDIR
+fi
 
 # cleanup
 if [ "$SKIP_PTEST" = "false" ]; then
     rm -f $VERSION/$PTESTDIR/*.log
 fi
 rm -f $VERSION/$CUTDIR/*.log
+if [ $CREATE_DOT = "true" ]; then
+    rm -f $VERSION/$DOTDIR/*.dot
+fi
 
 ### main #############################################
 # output result of ptest
@@ -82,6 +98,11 @@ if [ "$SKIP_PTEST" = "false" ]; then
         output_file=`echo "$input_file" | sed -e "s/bz2$/log/g"`
         echo "Making log file of $input_file"
         bunzip2 -c $BZ2DIR/$input_file | $PTEST -VVV -s -x - > $VERSION/$PTESTDIR/$output_file 2>&1
+        if [ $CREATE_DOT = "true" ]; then
+            output_dotfile=`echo "$input_file" | sed -e "s/bz2$/dot/g"`
+            echo "Making dot file of $input_file"
+            bunzip2 -c $BZ2DIR/$input_file | $PTEST -D $VERSION/$DOTDIR/$output_dotfile -x - 2>&1
+        fi
     done
 fi
 
