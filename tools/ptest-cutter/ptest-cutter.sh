@@ -17,7 +17,7 @@ CREATE_DOT="false"
 usage() {
 cat << END
 
-usage : ptest-cutter.sh [-c] [-g] {-b} directory
+usage : ptest-cutter.sh [-c] [-d] {-b} directory
 
       OPTIONS
       -b directory     specify the directory including bz2 files
