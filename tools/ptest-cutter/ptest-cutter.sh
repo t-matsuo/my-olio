@@ -7,28 +7,33 @@
 #   Copyright: Takatoshi MTTSUO (matsuo.tak@gmail.com)
 
 : ${PTEST:=$(which ptest 2>/dev/null)}
+
 PTESTDIR=ptest-result
 CUTDIR=ptest-cut
 DOTDIR=ptest-dot
+GRAPHDIR=graph
 
+# default
 SKIP_PTEST="false"
 CREATE_DOT="false"
+CREATE_GRAPH="false"
 
 usage() {
 cat << END
 
-usage : ptest-cutter.sh [-c] [-d] {-b} directory
+usage : ptest-cutter.sh [-c] [-d] [-g] {-b} directory
 
       OPTIONS
       -b directory     specify the directory including bz2 files
-      -c               cut only (not execute ptest)
-      -d               create dot files
+      -c               not execute ptest
+      -d               create dot files using ptest
+      -g               create graph(png) files from dot files. need dot command
 
 END
     exit 1
 }
 
-while getopts "b:cd" opts; do
+while getopts "b:cdg" opts; do
     case $opts in
     b)
         BZ2DIR=$OPTARG
@@ -41,6 +46,16 @@ while getopts "b:cd" opts; do
     d)
         CREATE_DOT="true"
         echo "Create dot files : $CREATE_DOT"
+        ;;
+    g)
+        which dot > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "dot command not found. graphviz package installed ?"
+            usage
+            exit 1
+        fi
+        CREATE_GRAPH="true"
+        echo "Create graph files : $CREATE_GRAPH"
         ;;
     :|\?)
         usage
@@ -83,6 +98,9 @@ fi
 if [ $CREATE_DOT = "true" -a ! -d $VERSION/$DOTDIR ]; then
     mkdir $VERSION/$DOTDIR
 fi
+if [ $CREATE_GRAPH = "true" -a ! -d $VERSION/$GRAPHDIR ]; then
+    mkdir $VERSION/$GRAPHDIR
+fi
 
 # cleanup
 if [ "$SKIP_PTEST" = "false" ]; then
@@ -91,6 +109,9 @@ fi
 rm -f $VERSION/$CUTDIR/*.log
 if [ $CREATE_DOT = "true" ]; then
     rm -f $VERSION/$DOTDIR/*.dot
+fi
+if [ $CREATE_GRAPH = "true" ]; then
+    rm -f $VERSION/$GRAPHDIR/*.png
 fi
 
 ### main #############################################
@@ -119,6 +140,16 @@ do
     grep -e "^notice:"  \
     > $VERSION/$CUTDIR/$logfile
 done
+
+# create graph files
+if [ "$CREATE_GRAPH" = "true" ]; then
+    for dotfile in `ls $VERSION/$DOTDIR`
+    do
+        echo "Creating graph file from $dotfile"
+        graphfile=`echo $dotfile | sed -e "s/dot$/png/g"`
+        dot -Tpng $VERSION/$DOTDIR/$dotfile -o $VERSION/$GRAPHDIR/$graphfile
+    done
+fi
 
 echo done
 echo
