@@ -21,7 +21,7 @@ CREATE_GRAPH="false"
 usage() {
 cat << END
 
-usage : ptest-cutter.sh [-c] [-d] [-g] {-b} directory
+usage : pe-tester.sh [-c] [-d] [-g] {-b} directory
 
       OPTIONS
       -b directory     specify the directory including bz2 files
