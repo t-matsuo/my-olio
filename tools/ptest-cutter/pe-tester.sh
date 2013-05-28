@@ -7,11 +7,12 @@
 #   Copyright: Takatoshi MTTSUO (matsuo.tak@gmail.com)
 
 : ${PTEST:=$(which ptest 2>/dev/null)}
+: ${PTEST:=$(which crm_simulate 2>/dev/null)}
 
-PTESTDIR=ptest-result
-CUTDIR=ptest-cut
-DOTDIR=ptest-dot
-GRAPHDIR=graph
+PTESTDIR=test-output
+CUTDIR=test-output-cut
+DOTDIR=test-output-dot
+GRAPHDIR=test-output-graph
 
 # default
 SKIP_PTEST="false"
@@ -25,8 +26,8 @@ usage : pe-tester.sh [-c] [-d] [-g] {-b} directory
 
       OPTIONS
       -b directory     specify the directory including bz2 files
-      -c               not execute ptest
-      -d               create dot files using ptest
+      -c               not execute ptest/crm_simulate
+      -d               create dot files using ptest/crm_simulate
       -g               create graph(png) files from dot files. need dot command
 
 END
@@ -41,7 +42,7 @@ while getopts "b:cdg" opts; do
         ;;
     c)
         SKIP_PTEST="true"
-        echo "Not execute ptest : $SKIP_PTEST"
+        echo "Not execute ptest/crm_simulate : $SKIP_PTEST"
         ;;
     d)
         CREATE_DOT="true"
@@ -70,20 +71,23 @@ fi
 
 # check binary
 if [ -z "$PTEST" -o ! -x "$PTEST" ]; then
-    echo "ptest command not found: $PTEST"
+    echo "ptest/crm_simulate command not found: $PTEST"
     exit 1
 fi
 
+echo "Using $PTEST command"
+
 # check version
 VERSION=`$PTEST --version | head -1 | tr -s " " | cut -d " " -f 2`
-echo $VERSION | grep -q [^0-9.-]
-if [ $? -eq 0 ]; then
+echo $VERSION | grep "[0-9]*\.[0-9]*\.[0-9]*"
+if [ $? -ne 0 ]; then
     echo "version [$VERSION] is invalid"
     exit 1
 fi
 
-echo "ptest version is $VERSION"
+echo "version is $VERSION"
 echo
+sleep 1
 
 # make directory
 if [ ! -d $VERSION ]; then
@@ -121,12 +125,14 @@ if [ "$SKIP_PTEST" = "false" ]; then
     do
         input_file=`basename $bz2file`
         output_file=`echo "$input_file" | sed -e "s/bz2$/log/g"`
-        echo "Making log file of $input_file"
-        bunzip2 -c $BZ2DIR/$input_file | $PTEST -VVV -s -x - > $VERSION/$PTESTDIR/$output_file 2>&1
         if [ $CREATE_DOT = "true" ]; then
             output_dotfile=`echo "$input_file" | sed -e "s/bz2$/dot/g"`
-            echo "Making dot file of $input_file"
-            bunzip2 -c $BZ2DIR/$input_file | $PTEST -D $VERSION/$DOTDIR/$output_dotfile -x - 2>&1
+            echo "Making log and dot files of $input_file"
+            bunzip2 -c $BZ2DIR/$input_file | $PTEST -D $VERSION/$DOTDIR/$output_dotfile -x - > $VERSION/$PTESTDIR/$output_file 2>&1
+            bunzip2 -c $BZ2DIR/$input_file | $PTEST -VVV -s -D $VERSION/$DOTDIR/$output_dotfile -x - > $VERSION/$PTESTDIR/$output_file 2>&1
+        else
+            echo "Making log file of $input_file"
+            bunzip2 -c $BZ2DIR/$input_file | $PTEST -VVV -s -x - > $VERSION/$PTESTDIR/$output_file 2>&1
         fi
     done
 fi
@@ -137,7 +143,7 @@ do
     echo "Cutting $logfile"
     cat $VERSION/$PTESTDIR/$logfile | \
     sed -e "s/^ptest\[[0-9]*\]: [0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9] //g" |\
-    grep -e "^notice:"  \
+    sed -e "s/^ *//g" | grep -e "notice:" \
     > $VERSION/$CUTDIR/$logfile
 done
 
@@ -153,7 +159,7 @@ fi
 
 echo done
 echo
-echo "Let's compare \"$VERSION/$CUTDIR\" directory to another version's directory"
+echo "Let's compare \"$VERSION/$CUTDIR\" or \"$VERSION/$DOTDIR\" directory to another version's directory"
 echo
 exit 0
 
