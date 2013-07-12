@@ -1,0 +1,224 @@
+#!/bin/sh
+#
+# Description:  Manages custom attribute
+#
+# Authors:      Takatoshi MATSUO (matsuo.tak@gmail.com) -- Initial version
+# Copyright:    2013-2013 Takatoshi MATSUO (matsuo.tak@gmail.com) 
+# License:      GNU General Public License (GPL)
+#
+###############################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+# Defaults
+OCF_RESKEY_name_default="my-attribute"
+OCF_RESKEY_value_default="up"
+OCF_RESKEY_crm_attr_timeout_default="5"
+
+: ${OCF_RESKEY_name=${OCF_RESKEY_name_default}}
+: ${OCF_RESKEY_value=${OCF_RESKEY_value_default}}
+: ${OCF_RESKEY_crm_attr_timeout=${OCF_RESKEY_crm_attr_timeout_default}}
+
+usage() {
+    cat <<EOF
+        usage: $0 start|stop|status|monitor|meta-data|validate-all|methods
+
+        $0 manages a custom attribute as an HA resource.
+
+        The 'start' set attribute.
+        The 'stop'  delete attribute.
+        The 'status' check attribute is defined.
+        The 'monitor' check attribute is defined.
+        The 'validate-all' operation reports whether the parameters are valid.
+        The 'methods' operation reports on the methods $0 supports.
+EOF
+  return $OCF_ERR_ARGS
+}
+
+meta_data() {
+    cat <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="attr">
+<version>1.0</version>
+
+<longdesc lang="en">
+Manage attribute.
+</longdesc>
+<shortdesc lang="en">Manage attribute</shortdesc>
+
+<parameters>
+
+<parameter name="name" unique="0" required="0">
+<longdesc lang="en">
+attribute name
+</longdesc>
+<shortdesc lang="en">attribute name</shortdesc>
+<content type="string" default="${OCF_RESKEY_name_default}" />
+</parameter>
+
+<parameter name="value" unique="0" required="0">
+<longdesc lang="en">
+attribute value
+</longdesc>
+<shortdesc lang="en">value</shortdesc>
+<content type="string" default="${OCF_RESKEY_value_default}" />
+</parameter>
+
+<parameter name="crm_attr_timeout" unique="0" required="0">
+<longdesc lang="en">
+The timeout of crm_attribute forever update command.
+Default value is 5 seconds.
+This is optional for replication.
+</longdesc>
+<shortdesc lang="en">The timeout of crm_attribute forever update command.</shortdesc>
+<content type="integer" default="${OCF_RESKEY_crm_attr_timeout_default}" />
+</parameter>
+
+</parameters>
+
+<actions>
+<action name="start" timeout="20" />
+<action name="stop" timeout="20" />
+<action name="status" timeout="20" />
+<action name="monitor" depth="0" timeout="20" interval="30"/>
+<action name="meta-data" timeout="5" />
+<action name="validate-all" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+EOF
+}
+
+attr_methods() {
+    cat <<EOF
+    start
+    stop
+    status
+    monitor
+    methods
+    meta-data
+    validate-all
+EOF
+}
+
+attr_start() {
+    show_value && return $OCF_SUCCESS
+    return $OCF_ERR_GENERIC
+}
+
+attr_stop() {
+    delete_value && return $OCF_SUCCESS
+    return $OCF_ERR_GENERIC
+}
+
+attr_status() {
+    attr_monitor && return $OCF_SUCCESS
+    return $OCF_ERR_GENERIC
+}
+
+attr_monitor() {
+    $CRM_ATTR_REBOOT -N "$NODENAME" -n "$OCF_RESKEY_name" -G -q && return $OCF_SUCCESS
+    return $OCF_NOT_RUNNING
+}
+
+delete_value() {
+    exec_with_retry 0 $CRM_ATTR_REBOOT -N "$NODENAME" -n "$OCF_RESKEY_name" -D
+}
+
+show_value() {
+    exec_with_retry 0 $CRM_ATTR_REBOOT -N "$NODENAME" -n "$OCF_RESKEY_name" -v "$OCF_RESKEY_value"
+}
+
+# retry command when command doesn't return 0
+# arg1       : count >= 0 (if arg1 is 0, it retries command in infinitum(1day))
+# arg2..argN : command and args
+exec_with_retry() {
+    local count="86400"
+    local output
+    local rc
+
+    if [ "$1" -ne 0 ]; then
+        count=$1
+    fi
+    shift
+
+    while [ $count -gt 0 ]; do
+        output=`$*`
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            ocf_log warn "Retrying(remain $count). \"$*\" failed. rc=$rc. stdout=\"$output\"."
+            count=`expr $count - 1`
+            sleep 1
+        else
+            printf "${output}"
+            return 0
+        fi
+    done
+
+    ocf_log err "giving up executing \"$*\""
+    return $rc
+}
+
+attr_validate_all() {
+    return $OCF_SUCCESS
+}
+
+
+# main
+
+NODENAME=`uname -n | tr '[A-Z]' '[a-z]'`
+CRM_ATTR_REBOOT="${HA_SBIN_DIR}/crm_attribute -l reboot"
+
+if [ $# -ne 1 ]
+then
+    usage
+    exit $OCF_ERR_GENERIC
+fi
+
+case "$1" in
+    methods)    attr_methods
+                exit $?;;
+
+    meta-data)  meta_data
+                exit $OCF_SUCCESS;;
+esac
+
+attr_validate_all
+rc=$?
+
+[ "$1" = "validate-all" ] && exit $rc
+
+if [ $rc -ne 0 ]
+then
+    case "$1" in
+        stop)    exit $OCF_SUCCESS;;
+        monitor) exit $OCF_NOT_RUNNING;;
+        status)  exit $OCF_NOT_RUNNING;;
+        *)       exit $rc;;
+    esac
+fi
+
+# What kind of method was invoked?
+case "$1" in
+    status)     if attr_status
+                then
+                    exit $OCF_SUCCESS
+                else
+                    exit $OCF_NOT_RUNNING
+                fi;;
+
+    monitor)    attr_monitor
+                exit $?;;
+
+    start)      attr_start
+                exit $?;;
+
+    stop)       attr_stop
+                exit $?;;
+
+    *)
+                exit $OCF_ERR_UNIMPLEMENTED;;
+esac
