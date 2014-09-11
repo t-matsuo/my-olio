@@ -127,7 +127,7 @@ The list of hosts that the STONITH device controls
 </longdesc>
 </parameter>
 
-<parameter name="hostos" unique="1" required="1">
+<parameter name="hostos" unique="0" required="1">
 <content type="string" />
 <shortdesc lang="en">
 Host OS
