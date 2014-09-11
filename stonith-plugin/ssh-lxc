@@ -1,0 +1,147 @@
+#!/bin/bash
+#
+# External STONITH module for ssh-lxc.
+#
+# Copyright (c) 2014 Takatoshi MATSUO <matsuo.tak@gmail.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of version 2 of the GNU General Public License as
+# published by the Free Software Foundation.
+
+target=`echo $2 | tr A-Z a-z`
+hostlist=`echo $hostlist | tr ',' ' '`
+SSH_COMMAND="/usr/bin/ssh -q -x -o PasswordAuthentication=no -o StrictHostKeyChecking=no -n -l root" 
+START_COMMAND="/usr/bin/lxc-start -d -n $target >/dev/null 2>&1"
+STOP_COMMAND="/usr/bin/lxc-stop -n $target >/dev/null 2>&1"
+HA_LOG="ha_log.sh"
+#HA_LOG="echo"
+
+is_host_up() {
+  $SSH_COMMAND "$hostos" "/usr/bin/lxc-ls --running | grep -q ^${target}$"
+  if [ $? -eq 0 ]; then
+    return 0
+  fi
+  return 1
+}
+
+stop_host() {
+    if ! is_host_up; then
+        $HA_LOG "$target is already stopped."
+        exit 0
+    fi
+    $SSH_COMMAND "$hostos" "$STOP_COMMAND"
+    if [ $? -ne 0 ]; then
+        $HA_LOG "faild to stop $target."
+        exit 1
+    fi
+    sleep 1
+    if is_host_up; then
+        $HA_LOG "faild to check $target is stopped."
+        exit 1
+    fi
+    return 0
+}
+
+start_host() {
+    if is_host_up; then
+        $HA_LOG "$target is already started."
+        exit 0
+    fi
+    $SSH_COMMAND "$hostos" "$START_COMMAND"
+    if [ $? -ne 0 ]; then
+        $HA_LOG "faild to start $target."
+        exit 1
+    fi
+    if ! is_host_up; then
+        $HA_LOG "faild to check $target is started."
+        exit 1
+    fi
+    return 0
+}
+
+case $1 in
+gethosts)
+    for h in $hostlist ; do
+        echo $h
+    done
+    exit 0
+    ;;
+on)
+    $HA_LOG "starting $target"
+    start_host
+    exit $?
+    ;;
+off)
+    $HA_LOG "stopping $target"
+    stop_host
+    exit $?
+    ;;
+reset)
+    $HA_LOG "rebooting $target"
+    stop_host || exit 1
+    start_host || exit 1
+    exit 0
+    ;;
+status)
+    if [ -z "$hostlist" ]; then
+      $HA_LOG "hostlist is empty"
+      exit 1
+    fi
+    ping -w1 -c1 "$hostos" >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        $HA_LOG "hostos $hostos is not alive."
+        exit 1
+    fi
+    exit 0
+    ;;
+getconfignames)
+    echo "hostlist"
+    exit 0
+    ;;
+getinfo-devid)
+    echo "ssh-lxc STONITH device"
+    exit 0
+    ;;
+getinfo-devname)
+    echo "ssh-lxc STONITH external device"
+    exit 0
+    ;;
+getinfo-devdescr)
+    echo "LXC reset using ssh"
+    exit 0
+    ;;
+getinfo-devurl)
+    echo "http://dummy-url/"
+    exit 0
+    ;;
+getinfo-xml)
+    cat << SSHXML
+<parameters>
+<parameter name="hostlist" unique="1" required="1">
+<content type="string" />
+<shortdesc lang="en">
+Hostlist
+</shortdesc>
+<longdesc lang="en">
+The list of hosts that the STONITH device controls
+</longdesc>
+</parameter>
+
+<parameter name="hostos" unique="1" required="1">
+<content type="string" />
+<shortdesc lang="en">
+Host OS
+</shortdesc>
+<longdesc lang="en">
+Host OS which can handle LXC.
+</longdesc>
+</parameter>
+</parameters>
+SSHXML
+    exit 0
+    ;;
+*)
+    $HA_LOG "invalid arguments \"$1\""
+    exit 1
+    ;;
+esac
