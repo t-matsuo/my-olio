@@ -26,17 +26,17 @@ is_host_up() {
 
 stop_host() {
     if ! is_host_up; then
-        $HA_LOG "$target is already stopped."
+        $HA_LOG info "$target is already stopped."
         exit 0
     fi
     $SSH_COMMAND "$hostos" "$STOP_COMMAND"
     if [ $? -ne 0 ]; then
-        $HA_LOG "faild to stop $target."
+        $HA_LOG err "faild to stop $target."
         exit 1
     fi
     sleep 1
     if is_host_up; then
-        $HA_LOG "faild to check $target is stopped."
+        $HA_LOG err "faild to check $target is stopped."
         exit 1
     fi
     return 0
@@ -44,16 +44,16 @@ stop_host() {
 
 start_host() {
     if is_host_up; then
-        $HA_LOG "$target is already started."
+        $HA_LOG info "$target is already started."
         exit 0
     fi
     $SSH_COMMAND "$hostos" "$START_COMMAND"
     if [ $? -ne 0 ]; then
-        $HA_LOG "faild to start $target."
+        $HA_LOG err "faild to start $target."
         exit 1
     fi
     if ! is_host_up; then
-        $HA_LOG "faild to check $target is started."
+        $HA_LOG err "faild to check $target is started."
         exit 1
     fi
     return 0
@@ -67,29 +67,29 @@ gethosts)
     exit 0
     ;;
 on)
-    $HA_LOG "starting $target"
+    $HA_LOG info "starting $target"
     start_host
     exit $?
     ;;
 off)
-    $HA_LOG "stopping $target"
+    $HA_LOG info "stopping $target"
     stop_host
     exit $?
     ;;
 reset)
-    $HA_LOG "rebooting $target"
+    $HA_LOG info "rebooting $target"
     stop_host || exit 1
     start_host || exit 1
     exit 0
     ;;
 status)
     if [ -z "$hostlist" ]; then
-      $HA_LOG "hostlist is empty"
+      $HA_LOG err "hostlist is empty"
       exit 1
     fi
     ping -w1 -c1 "$hostos" >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        $HA_LOG "hostos $hostos is not alive."
+        $HA_LOG err "hostos $hostos is not alive."
         exit 1
     fi
     exit 0
@@ -141,7 +141,7 @@ SSHXML
     exit 0
     ;;
 *)
-    $HA_LOG "invalid arguments \"$1\""
+    $HA_LOG err "invalid arguments \"$1\""
     exit 1
     ;;
 esac
